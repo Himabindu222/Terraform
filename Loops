@@ -1,339 +1,144 @@
 #### count.tf
-# Create VPC
-resource "aws_vpc" "EKart" {
-  cidr_block       = "10.0.0.0/16"
-  //instance_tenancy = "default"
 
-  tags = {
-    Name = "app-vpc"
-  }
+provider "aws" {
+   region     = "eu-central-1"
+}
+resource "aws_instance" "ec2_example" {
+
+   ami           = "ami-0767046d1677be5a0"
+   instance_type =  "t2.micro"
+   count = 1
+
+   tags = {
+           Name = "Terraform EC2"
+   }
+
 }
 
-# Create internet Gateway
-resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.EKart.id
-
-  tags = {
-    Name = "EKart-internet-gateway"
-  }
+resource "aws_iam_user" "example" {
+  count = length(var.user_names)
+  name  = var.user_names[count.index]
 }
-
-# Attaching IGW to VPC
-resource "aws_internet_gateway_attachment" "attach" {
-  internet_gateway_id = aws_internet_gateway.gw.id
-  vpc_id              = aws_vpc.EKart.id
-}
-
-
-# Creating 2 public subnets in AZ choosing the vpc
-resource "aws_subnet" "public" {
-  vpc_id     = aws_vpc.EKart.id
-  //count = 2
-  cidr_block = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
-
-  tags = {
-    Name = "public-subnet "
-  }
-}
-
-#  Creating 2 private subnets in AZ choosing the vpc
-resource "aws_subnet" "private" {
-  vpc_id     = aws_vpc.EKart.id
-  //count = 2
-  cidr_block = "10.0.2.0/24"
-  availability_zone = "us-east-1a"
- 
-  tags = {
-    Name = "private-subnet "
-  }
-}
-
-# create routetables and attach them to subnets
-
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.EKart.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gw.id
-  }
-
-  tags = {
-    Name = "public-route-table"
-  }
-}
-
-resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
-}
-
-# nat gateway has to be created in public subnet with elasticip attached
-# Create an Elastic IP address for the NAT gateway
-resource "aws_eip" "nat" {
-  # Tags for the Elastic IP address
-  tags = {
-    Name = "example-eip"
-  }
-}
-
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
-
-  tags = {
-    Name = "nat-gateway"
-  }
-}
-
- # Creating route table and associating with nat gateway (NAT gate way should always be in public subnet with elastic ip attached)
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.EKart.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat.id
-  }
-
-  tags = {
-    Name = "private-route-table"
-  }
-}
-
-resource "aws_route_table_association" "private" {
-  subnet_id      = aws_subnet.private.id
-  route_table_id = aws_route_table.private.id
+#------------------ list ---------------------
+variable "user_names" {
+  description = "IAM usernames"
+  type        = list(string)
+  default     = ["user1", "user2", "user3"]
 }
 
 
-# Security group for Public subnet
-resource "aws_security_group" "public_sg" {
-  vpc_id = aws_vpc.EKart.id
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+#-------------------- set ------------------
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "public-sg"
-  }
+#Step 1: Create a set
+variable "my_set" {
+   type    = set(string)
+   default = ["value1", "value2", "value3"]
 }
 
-# Security group for private subnet
-resource "aws_security_group" "private_sg" {
-  vpc_id = aws_vpc.EKart.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "private-sg"
-  }
+#Step 2: Convert set to list   
+#you can not use the count meta argument directly over the set, first you need to convert the set to the list.
+locals {
+   my_list = tolist(var.my_set)
 }
 
-#### foreach.tf
-# Create VPC
-resource "aws_vpc" "EKart" {
-  cidr_block       = "10.0.0.0/16"
-  //instance_tenancy = "default"
+#Step 3: Use count to iterate
+resource "my_resource" "example" {
+   count = length(local.my_list)
 
-  tags = {
-    Name = "app-vpc"
-  }
-}
-
-# Create internet Gateway
-resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.EKart.id
-
-  tags = {
-    Name = "EKart-internet-gateway"
-  }
-}
-
-# Attaching IGW to VPC
-resource "aws_internet_gateway_attachment" "attach" {
-  internet_gateway_id = aws_internet_gateway.gw.id
-  vpc_id              = aws_vpc.EKart.id
+   name = local.my_list[count.index]
+   # Additional resource configuration...
 }
 
 
-# Creating 2 public subnets in AZ choosing the vpc
-resource "aws_subnet" "public" {
-  vpc_id     = aws_vpc.EKart.id
-  //count = 2
-  cidr_block = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
 
-  tags = {
-    Name = "public-subnet "
+
+
+#--------------- map ---------------
+#Ideally the count meta-argument are not meant for iterating over map or set but there are some alternates by 
+#which you can iterate over the map using the count meta-argument.
+
+#Step 1: Create a map variable
+variable "my_map" {
+  type = map(string)
+  default = {
+    key1 = "value1"
+    key2 = "value2"
+    key3 = "value3"
   }
 }
 
-#  Creating 2 private subnets in AZ choosing the vpc
-resource "aws_subnet" "private" {
-  vpc_id     = aws_vpc.EKart.id
-  //count = 2
-  cidr_block = "10.0.2.0/24"
-  availability_zone = "us-east-1a"
- 
-  tags = {
-    Name = "private-subnet "
-  }
+#Step 2: Fetch keys of map
+locals {
+  my_keys = keys(var.my_map)
 }
 
-# create routetables and attach them to subnets
+#Step 3: iterate over map using keys and count.index meta argument
+resource "my_resource" "example" {
+  count = length(local.my_keys)
 
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.EKart.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gw.id
-  }
-
-  tags = {
-    Name = "public-route-table"
-  }
-}
-
-resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
-}
-
-# nat gateway has to be created in public subnet with elasticip attached
-# Create an Elastic IP address for the NAT gateway
-resource "aws_eip" "nat" {
-  # Tags for the Elastic IP address
-  tags = {
-    Name = "example-eip"
-  }
-}
-
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
-
-  tags = {
-    Name = "nat-gateway"
-  }
-}
-
- # Creating route table and associating with nat gateway (NAT gate way should always be in public subnet with elastic ip attached)
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.EKart.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat.id
-  }
-
-  tags = {
-    Name = "private-route-table"
-  }
-}
-
-resource "aws_route_table_association" "private" {
-  subnet_id      = aws_subnet.private.id
-  route_table_id = aws_route_table.private.id
+  name  = local.my_keys[count.index]
+  value = var.my_map[local.my_keys[count.index]]
+  # Additional resource configuration...
 }
 
 
-# Security group for Public subnet
-resource "aws_security_group" "public_sg" {
-  vpc_id = aws_vpc.EKart.id
+#### for_each.tf
+#for_each does not support list as it contains duplicates. sowe castlist to set
+#Step 1: Create a list varible
+variable "my_list" {
+   type    = list(string)
+   default = ["value1", "value2", "value3"]
+}
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "my_resource" "example" {
+   
+   #Step 2: Convert list to set using toset() function 
+   for_each = toset(var.my_list)
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+   #Step 3: Iterate over the list
+   name = each.value
+   # Additional resource configuration...
+}
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
-  tags = {
-    Name = "public-sg"
+
+
+
+
+
+#--------- set ---------------
+
+resource "aws_iam_user" "example" {
+  for_each = var.user_names
+  name  = each.value
+}
+
+variable "user_names" {
+  description = "IAM usernames"
+  type        = set(string)
+  default     = ["user1", "user2", "user3"]
+}
+
+# ---------- map ---------------
+
+#Step 1: Create a map 
+variable "my_map" {
+  type = map(string)
+  default = {
+    key1 = "value1"
+    key2 = "value2"
+    key3 = "value3"
   }
 }
 
-# Security group for private subnet
-resource "aws_security_group" "private_sg" {
-  vpc_id = aws_vpc.EKart.id
+#Step 2: Iterate over the map using for_each
+resource "my_resource" "example" {
+  for_each = var.my_map
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "private-sg"
-  }
+  name  = each.key
+  value = each.value
+  # Additional resource configuration...
 }
 
 
