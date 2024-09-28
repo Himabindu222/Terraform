@@ -1,0 +1,340 @@
+#### count.tf
+# Create VPC
+resource "aws_vpc" "EKart" {
+  cidr_block       = "10.0.0.0/16"
+  //instance_tenancy = "default"
+
+  tags = {
+    Name = "app-vpc"
+  }
+}
+
+# Create internet Gateway
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.EKart.id
+
+  tags = {
+    Name = "EKart-internet-gateway"
+  }
+}
+
+# Attaching IGW to VPC
+resource "aws_internet_gateway_attachment" "attach" {
+  internet_gateway_id = aws_internet_gateway.gw.id
+  vpc_id              = aws_vpc.EKart.id
+}
+
+
+# Creating 2 public subnets in AZ choosing the vpc
+resource "aws_subnet" "public" {
+  vpc_id     = aws_vpc.EKart.id
+  //count = 2
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "us-east-1a"
+
+  tags = {
+    Name = "public-subnet "
+  }
+}
+
+#  Creating 2 private subnets in AZ choosing the vpc
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.EKart.id
+  //count = 2
+  cidr_block = "10.0.2.0/24"
+  availability_zone = "us-east-1a"
+ 
+  tags = {
+    Name = "private-subnet "
+  }
+}
+
+# create routetables and attach them to subnets
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.EKart.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "public-route-table"
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+# nat gateway has to be created in public subnet with elasticip attached
+# Create an Elastic IP address for the NAT gateway
+resource "aws_eip" "nat" {
+  # Tags for the Elastic IP address
+  tags = {
+    Name = "example-eip"
+  }
+}
+
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
+
+  tags = {
+    Name = "nat-gateway"
+  }
+}
+
+ # Creating route table and associating with nat gateway (NAT gate way should always be in public subnet with elastic ip attached)
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.EKart.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat.id
+  }
+
+  tags = {
+    Name = "private-route-table"
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.private.id
+}
+
+
+# Security group for Public subnet
+resource "aws_security_group" "public_sg" {
+  vpc_id = aws_vpc.EKart.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "public-sg"
+  }
+}
+
+# Security group for private subnet
+resource "aws_security_group" "private_sg" {
+  vpc_id = aws_vpc.EKart.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "private-sg"
+  }
+}
+
+#### foreach.tf
+# Create VPC
+resource "aws_vpc" "EKart" {
+  cidr_block       = "10.0.0.0/16"
+  //instance_tenancy = "default"
+
+  tags = {
+    Name = "app-vpc"
+  }
+}
+
+# Create internet Gateway
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.EKart.id
+
+  tags = {
+    Name = "EKart-internet-gateway"
+  }
+}
+
+# Attaching IGW to VPC
+resource "aws_internet_gateway_attachment" "attach" {
+  internet_gateway_id = aws_internet_gateway.gw.id
+  vpc_id              = aws_vpc.EKart.id
+}
+
+
+# Creating 2 public subnets in AZ choosing the vpc
+resource "aws_subnet" "public" {
+  vpc_id     = aws_vpc.EKart.id
+  //count = 2
+  cidr_block = "10.0.1.0/24"
+  availability_zone = "us-east-1a"
+
+  tags = {
+    Name = "public-subnet "
+  }
+}
+
+#  Creating 2 private subnets in AZ choosing the vpc
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.EKart.id
+  //count = 2
+  cidr_block = "10.0.2.0/24"
+  availability_zone = "us-east-1a"
+ 
+  tags = {
+    Name = "private-subnet "
+  }
+}
+
+# create routetables and attach them to subnets
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.EKart.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "public-route-table"
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+# nat gateway has to be created in public subnet with elasticip attached
+# Create an Elastic IP address for the NAT gateway
+resource "aws_eip" "nat" {
+  # Tags for the Elastic IP address
+  tags = {
+    Name = "example-eip"
+  }
+}
+
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
+
+  tags = {
+    Name = "nat-gateway"
+  }
+}
+
+ # Creating route table and associating with nat gateway (NAT gate way should always be in public subnet with elastic ip attached)
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.EKart.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat.id
+  }
+
+  tags = {
+    Name = "private-route-table"
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  subnet_id      = aws_subnet.private.id
+  route_table_id = aws_route_table.private.id
+}
+
+
+# Security group for Public subnet
+resource "aws_security_group" "public_sg" {
+  vpc_id = aws_vpc.EKart.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "public-sg"
+  }
+}
+
+# Security group for private subnet
+resource "aws_security_group" "private_sg" {
+  vpc_id = aws_vpc.EKart.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "private-sg"
+  }
+}
+
+
+#### for.tf
